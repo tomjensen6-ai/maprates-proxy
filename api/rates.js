@@ -26,11 +26,15 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Server configuration error' });
         }
         
-        // Build the API URL for ExchangeRate-API
-        // Using v6 endpoint for better features
-        const apiUrl = `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${base}`;
+        // Build the API URL for exchangerate.host with API key
+        let apiUrl = `https://api.exchangerate.host/latest?access_key=${apiKey}&base=${base}`;
         
-        // Fetch from ExchangeRate-API
+        // Add symbols if specified
+        if (symbols) {
+            apiUrl += `&symbols=${symbols}`;
+        }
+        
+        // Fetch from exchangerate.host
         const response = await fetch(apiUrl);
         
         if (!response.ok) {
@@ -42,22 +46,30 @@ export default async function handler(req, res) {
         
         const data = await response.json();
         
+        // Check for API errors
+        if (!data.success) {
+            console.error('API returned error:', data.error);
+            return res.status(400).json({ 
+                error: data.error?.info || 'Exchange rate API error' 
+            });
+        }
+        
         // Transform the response to match your app's expected format
         const transformedData = {
-            success: data.result === 'success',
-            base: data.base_code,
-            date: data.time_last_update_utc,
-            rates: data.conversion_rates,
-            timestamp: data.time_last_update_unix
+            success: data.success,
+            base: data.base,
+            date: data.date,
+            rates: data.rates,
+            timestamp: data.timestamp || Math.floor(new Date(data.date).getTime() / 1000)
         };
         
-        // If specific symbols were requested, filter the rates
-        if (symbols) {
+        // If specific symbols were requested and not already filtered by API
+        if (symbols && data.rates) {
             const symbolList = symbols.split(',').map(s => s.trim().toUpperCase());
             const filteredRates = {};
             symbolList.forEach(symbol => {
-                if (transformedData.rates[symbol]) {
-                    filteredRates[symbol] = transformedData.rates[symbol];
+                if (data.rates[symbol] !== undefined) {
+                    filteredRates[symbol] = data.rates[symbol];
                 }
             });
             transformedData.rates = filteredRates;
