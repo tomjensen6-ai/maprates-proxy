@@ -18,21 +18,25 @@ export default async function handler(req, res) {
         // Get parameters from query string
         const { base = 'USD', symbols } = req.query;
         
-        // Build the correct API URL for exchangerate.host
-        // Use /convert endpoint for specific pairs or /latest for all rates
-        let apiUrl;
+        // Get API key from environment variable
+        const apiKey = process.env.EXCHANGE_API_KEY;
         
-        if (symbols) {
-            // When symbols are specified, fetch only those
-            apiUrl = `https://api.exchangerate.host/latest?base=${base}&symbols=${symbols}`;
-        } else {
-            // Get all rates for the base currency
-            apiUrl = `https://api.exchangerate.host/latest?base=${base}`;
+        if (!apiKey) {
+            console.error('EXCHANGE_API_KEY not configured');
+            return res.status(500).json({ error: 'Server configuration error - API key missing' });
         }
         
-        console.log('Fetching:', apiUrl);
+        // Build the API URL with access_key parameter
+        let apiUrl = `https://api.exchangerate.host/latest?access_key=${apiKey}&base=${base}`;
         
-        // Fetch from exchangerate.host (no API key needed!)
+        // Add symbols if specified
+        if (symbols) {
+            apiUrl += `&symbols=${symbols}`;
+        }
+        
+        console.log('Fetching (key hidden):', apiUrl.replace(apiKey, 'HIDDEN'));
+        
+        // Fetch from exchangerate.host
         const response = await fetch(apiUrl);
         
         if (!response.ok) {
