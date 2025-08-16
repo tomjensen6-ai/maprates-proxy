@@ -18,23 +18,21 @@ export default async function handler(req, res) {
         // Get parameters from query string
         const { base = 'USD', symbols } = req.query;
         
-        // Get API key from environment variable
-        const apiKey = process.env.EXCHANGE_API_KEY;
+        // Build the correct API URL for exchangerate.host
+        // Use /convert endpoint for specific pairs or /latest for all rates
+        let apiUrl;
         
-        if (!apiKey) {
-            console.error('EXCHANGE_API_KEY not configured');
-            return res.status(500).json({ error: 'Server configuration error' });
-        }
-        
-        // Build the API URL for exchangerate.host with API key
-        let apiUrl = `https://api.exchangerate.host/latest?access_key=${apiKey}&base=${base}`;
-        
-        // Add symbols if specified
         if (symbols) {
-            apiUrl += `&symbols=${symbols}`;
+            // When symbols are specified, fetch only those
+            apiUrl = `https://api.exchangerate.host/latest?base=${base}&symbols=${symbols}`;
+        } else {
+            // Get all rates for the base currency
+            apiUrl = `https://api.exchangerate.host/latest?base=${base}`;
         }
         
-        // Fetch from exchangerate.host
+        console.log('Fetching:', apiUrl);
+        
+        // Fetch from exchangerate.host (no API key needed!)
         const response = await fetch(apiUrl);
         
         if (!response.ok) {
@@ -46,34 +44,23 @@ export default async function handler(req, res) {
         
         const data = await response.json();
         
-        // Check for API errors
-        if (!data.success) {
-            console.error('API returned error:', data.error);
+        // Check if the API returned an error
+        if (data.success === false) {
+            console.error('API error:', data.error);
             return res.status(400).json({ 
-                error: data.error?.info || 'Exchange rate API error' 
+                error: 'Exchange rate API error',
+                details: data.error
             });
         }
         
         // Transform the response to match your app's expected format
         const transformedData = {
-            success: data.success,
-            base: data.base,
-            date: data.date,
-            rates: data.rates,
-            timestamp: data.timestamp || Math.floor(new Date(data.date).getTime() / 1000)
+            success: true,
+            base: data.base || base,
+            date: data.date || new Date().toISOString().split('T')[0],
+            rates: data.rates || {},
+            timestamp: Math.floor(new Date(data.date || Date.now()).getTime() / 1000)
         };
-        
-        // If specific symbols were requested and not already filtered by API
-        if (symbols && data.rates) {
-            const symbolList = symbols.split(',').map(s => s.trim().toUpperCase());
-            const filteredRates = {};
-            symbolList.forEach(symbol => {
-                if (data.rates[symbol] !== undefined) {
-                    filteredRates[symbol] = data.rates[symbol];
-                }
-            });
-            transformedData.rates = filteredRates;
-        }
         
         // Cache the response for 1 hour
         res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
