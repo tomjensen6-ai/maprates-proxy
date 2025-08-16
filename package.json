@@ -1,0 +1,12 @@
+{
+  "name": "maprates-proxy",
+  "version": "1.0.0",
+  "description": "Proxy server for MapRates API calls",
+  "main": "api/rates.js",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@vercel/kv": "^1.0.0"
+  }
+}
