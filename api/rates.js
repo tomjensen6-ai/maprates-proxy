@@ -22,51 +22,95 @@ export default async function handler(req, res) {
         const apiKey = process.env.EXCHANGE_API_KEY;
         
         if (!apiKey) {
-            console.error('EXCHANGE_API_KEY not configured');
-            return res.status(500).json({ error: 'Server configuration error - API key missing' });
+            // If no API key, try without it (free tier)
+            console.log('No API key configured, trying free tier');
         }
         
-        // Build the API URL with access_key parameter
-        let apiUrl = `https://api.exchangerate.host/latest?access_key=${apiKey}&base=${base}`;
+        // Build URL - try the format that works in your local app
+        let apiUrl = 'https://api.exchangerate.host/latest';
         
-        // Add symbols if specified
+        // Add parameters
+        const params = new URLSearchParams();
+        if (apiKey) {
+            params.append('access_key', apiKey);
+        }
+        params.append('base', base);
         if (symbols) {
-            apiUrl += `&symbols=${symbols}`;
+            params.append('symbols', symbols);
         }
         
-        console.log('Fetching (key hidden):', apiUrl.replace(apiKey, 'HIDDEN'));
+        apiUrl += '?' + params.toString();
+        
+        console.log('Fetching:', apiUrl.replace(apiKey || '', 'HIDDEN'));
         
         // Fetch from exchangerate.host
         const response = await fetch(apiUrl);
-        
-        if (!response.ok) {
-            console.error('API response error:', response.status);
-            return res.status(response.status).json({ 
-                error: 'Failed to fetch exchange rates' 
-            });
-        }
-        
         const data = await response.json();
         
-        // Check if the API returned an error
+        console.log('Response success:', data.success);
+        
+        // If we get an auth error and have a key, try without base parameter
+        if (data.success === false && data.error?.code === 103 && apiKey) {
+            console.log('Retrying without base parameter (EUR only)');
+            
+            // Some plans only support EUR as base
+            const fallbackUrl = `https://api.exchangerate.host/latest?access_key=${apiKey}`;
+            const fallbackResponse = await fetch(fallbackUrl);
+            const fallbackData = await fallbackResponse.json();
+            
+            if (fallbackData.success) {
+                // Convert from EUR to requested base if needed
+                if (base !== 'EUR' && fallbackData.rates[base]) {
+                    const conversionRate = fallbackData.rates[base];
+                    const convertedRates = {};
+                    
+                    Object.keys(fallbackData.rates).forEach(currency => {
+                        if (currency !== base) {
+                            convertedRates[currency] = fallbackData.rates[currency] / conversionRate;
+                        }
+                    });
+                    
+                    data.success = true;
+                    data.base = base;
+                    data.rates = convertedRates;
+                    data.date = fallbackData.date;
+                } else {
+                    data = fallbackData;
+                }
+            }
+        }
+        
+        // Check for errors
         if (data.success === false) {
-            console.error('API error:', data.error);
             return res.status(400).json({ 
                 error: 'Exchange rate API error',
-                details: data.error
+                details: data.error,
+                note: 'Check if your plan supports the requested base currency'
             });
         }
         
-        // Transform the response to match your app's expected format
+        // Transform the response
         const transformedData = {
             success: true,
             base: data.base || base,
             date: data.date || new Date().toISOString().split('T')[0],
             rates: data.rates || {},
-            timestamp: Math.floor(new Date(data.date || Date.now()).getTime() / 1000)
+            timestamp: data.timestamp || Math.floor(new Date(data.date || Date.now()).getTime() / 1000)
         };
         
-        // Cache the response for 1 hour
+        // Filter symbols if specified
+        if (symbols && transformedData.rates) {
+            const symbolList = symbols.split(',').map(s => s.trim().toUpperCase());
+            const filteredRates = {};
+            symbolList.forEach(symbol => {
+                if (transformedData.rates[symbol] !== undefined) {
+                    filteredRates[symbol] = transformedData.rates[symbol];
+                }
+            });
+            transformedData.rates = filteredRates;
+        }
+        
+        // Cache for 1 hour
         res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
         
         return res.status(200).json(transformedData);
