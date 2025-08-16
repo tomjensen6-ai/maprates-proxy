@@ -58,10 +58,14 @@ export default async function handler(req, res) {
             const fallbackResponse = await fetch(fallbackUrl);
             const fallbackData = await fallbackResponse.json();
             
+            console.log('Fallback response success:', fallbackData.success);
+            console.log('Fallback has rates:', !!fallbackData.rates);
+            
             if (fallbackData.success) {
                 // Convert from EUR to requested base if needed
-                if (base !== 'EUR' && fallbackData.rates[base]) {
+                if (base !== 'EUR' && fallbackData.rates && fallbackData.rates[base]) {
                     const conversionRate = fallbackData.rates[base];
+                    console.log(`Converting from EUR to ${base} using rate: ${conversionRate}`);
                     const convertedRates = {};
                     
                     Object.keys(fallbackData.rates).forEach(currency => {
@@ -70,13 +74,17 @@ export default async function handler(req, res) {
                         }
                     });
                     
-                    data.success = true;
-                    data.base = base;
-                    data.rates = convertedRates;
-                    data.date = fallbackData.date;
+                    data = {
+                        success: true,
+                        base: base,
+                        rates: convertedRates,
+                        date: fallbackData.date
+                    };
                 } else {
                     data = fallbackData;
                 }
+            } else {
+                console.log('Fallback also failed:', fallbackData.error);
             }
         }
         
