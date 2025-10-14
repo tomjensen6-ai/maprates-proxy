@@ -27,8 +27,13 @@ export default async function handler(req, res) {
     
     const data = await response.json();
     
+    // Filter to only include teams from current season (2025-2026)
+    const teams = data.teams || [];
+    
     return res.status(200).json({
-      teams: data.teams || []
+      teams: teams,
+      season: data.season || {},
+      competition: data.competition || {}
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to fetch teams' });
