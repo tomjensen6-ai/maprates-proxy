@@ -14,27 +14,27 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Football-data.org returns competitions, we'll extract unique countries
     const response = await fetch('https://api.football-data.org/v4/competitions', {
       headers: { 'X-Auth-Token': apiKey }
     });
     
     const data = await response.json();
     
-    // Extract unique countries from competitions
-    const countries = [...new Set(data.competitions
-      .filter(c => c.area && c.area.name)
-      .map(c => ({
-        name: c.area.name,
-        code: c.area.code || c.area.name.substring(0, 3).toUpperCase(),
-        flag: c.area.flag
-      }))
-    )];
+    // Extract unique countries
+    const countriesMap = new Map();
+    (data.competitions || []).forEach(comp => {
+      if (comp.area && comp.area.code) {
+        countriesMap.set(comp.area.code, {
+          name: comp.area.name,
+          code: comp.area.code,
+          flag: comp.area.flag
+        });
+      }
+    });
     
-    // Return in a format similar to api-sports
+    const countries = Array.from(countriesMap.values());
+    
     return res.status(200).json({
-      get: 'countries',
-      results: countries.length,
       response: countries
     });
   } catch (error) {

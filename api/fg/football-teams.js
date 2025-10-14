@@ -28,9 +28,7 @@ export default async function handler(req, res) {
     const data = await response.json();
     
     return res.status(200).json({
-      get: 'teams',
-      results: data.teams?.length || 0,
-      response: data.teams || []
+      teams: data.teams || []
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to fetch teams' });

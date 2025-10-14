@@ -21,7 +21,6 @@ export default async function handler(req, res) {
     
     const data = await response.json();
     
-    // Filter by country if specified
     let competitions = data.competitions || [];
     if (country) {
       competitions = competitions.filter(c => 
@@ -31,8 +30,6 @@ export default async function handler(req, res) {
     }
     
     return res.status(200).json({
-      get: 'leagues',
-      results: competitions.length,
       response: competitions
     });
   } catch (error) {

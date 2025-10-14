@@ -20,11 +20,10 @@ export default async function handler(req, res) {
     
     const data = await response.json();
     
-    // Return in expected format
+    // Return in the format App.js expects
     return res.status(200).json({
-      get: 'competitions',
-      results: data.competitions?.length || 0,
-      response: data.competitions || []
+      competitions: data.competitions || [],
+      count: data.count || data.competitions?.length || 0
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to fetch competitions' });
